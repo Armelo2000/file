@@ -2,21 +2,19 @@
 
  ********************************************************************************************************************/
 
-#ifndef GPFCOMMON_INFRASTRUCTURE_MEMORY_FILEOBJECT_H_
-#define GPFCOMMON_INFRASTRUCTURE_MEMORY_FILEOBJECT_H_
+#ifndef FILEOBJECT_H_
+#define FILEOBJECT_H_
 
 #include "Common.h"
 #include <string>
 #include "RingBuffer/CircularBuffer.h"
 #include <memory>
 
-class MemoryNode;
-
 using namespace std;
 
 class FileObject{
 
-	//friend class MemoryManagementCloManager;
+	friend class MemoryManager;
 private:
 	/********************************************************
 	 * das ist die maximale Datei-index
@@ -95,6 +93,17 @@ private:
 	CircularBuffer* m_circular_buffer;
 	//shared_ptr<CircularBuffer> m_circular;
 
+	/****************************************************************************************
+	 * Diese Member ist die Anzahl von Dateien im Ringspeicher
+	 ****************************************************************************************/
+	uint16_t m_numberOfFile;
+
+	/****************************************************************************************
+	 * Diese Member gibt an, ob die Datei sich im Ringspeicher befindet.
+	 * 		- Es handelt sich um einem Ringspeicher wenn der true ist ansonst false.
+	 ****************************************************************************************/
+	bool m_isRingBuffer	{false};
+
 	/********************************************************************************
 	 * Diese Routine setzt die aktuelle Dateigröße.
 	 *
@@ -106,6 +115,11 @@ private:
 	 * Diese routine erzeugt eine neue Datei
 	 **************************************************************/
 	void createFile();
+
+	/***************************************************************
+	 * Diese routine erzeugt eine neue Ordner
+	 **************************************************************/
+	void createFolder();
 
 	/***************************************************************
 	 * Diese Routine löscht eine Datei im Festspeicher
@@ -124,16 +138,25 @@ private:
 	 **************************************************************/
 	bool isFolderExist(string folderpath);
 
+	/**********************************************************************
+	 * Diese Routine liefert der Index neueste gespeicherte Datei zurück
+	 *********************************************************************/
+	int getNewFileId();
+
+	/**********************************************************************
+	 * Diese Routine liefert der Index älteste gespeicherte Datei zurück
+	 *********************************************************************/
+	int getOldFileId();
+
+	/****************************************************************
+	 * Diese Routine aktualisiert die Attribute für das FileObject
+	 ****************************************************************/
+	void updateFileObject();
+
 public:
 
 	FileObject(string folder, string filename, string ext, uint32_t filesize, uint16_t numberofFile);
 	~FileObject();
-
-	/**************************************************************************************
-	 * Diese Methode schreibt im Datei
-	 * @param: file, das ist das Objekt mit der Datei wo es geschrieben werden soll.
-	 *************************************************************************************/
-	void save(FileObject* file);
 
 	/*******************************************************************************************
 	 * Diese Routine liefert zurück, der Ordnername wo die Dateien gespeichert werden sollen.
@@ -160,54 +183,22 @@ public:
 	 *******************************************************************************************/
 	uint32_t getCurrentFileIndex();
 
-	/**********************************************************************
-	 * Diese Routine liefert der Index neueste gespeicherte Datei zurück
-	 *********************************************************************/
-	int getNewFileId();
+	/***********************************************************
+	 * Diese Routine schreibt byte in Datei
+	 ***********************************************************/
+	void write(uint8_t* data, uint32_t length);
 
-	/**********************************************************************
-	 * Diese Routine liefert der Index älteste gespeicherte Datei zurück
-	 *********************************************************************/
-	int getOldFileId();
+	/***********************************************************
+	 * Diese Routine schreibt string in Datei
+	 ***********************************************************/
+	void write(string text);
 
 	/*******************************************************************************************
 	 * TODO Diese Routine ist ein Test um die Erstellung vom Objekt FileObject zu prüfen.
 	 *******************************************************************************************/
 	void init();
 
-	void updateFileObject();
-
-	/***********************************************************
-	 * Diese Routine schreibt in Datei
-	 ***********************************************************/
-	void write(uint8_t* data, uint32_t length);
-
-
-	/*******************************************************************************************
-	 * Diese Variable gibt an der Index von Datei im Ordner. Es soll immer inkrementiert werden
-	 * wenn einen neue Datei erstellt wird. Diese kommt viel vor beim Ringspeichern von Dateien
-	 *******************************************************************************************/
-	uint32_t m_index{1};
-
-	/*******************************************************************************************
-	 * Diese Variable beinhalte der string, der im Datei geschrieben werden soll.
-	 *******************************************************************************************/
-	string m_log;			//data to log
-
-//private:
-
-	/****************************************************************************************
-	 * Diese Member ist die Anzahl von Dateien im Ringspeicher
-	 ****************************************************************************************/
-	uint16_t m_numberOfFile;
-
-	/****************************************************************************************
-	 * Diese Member gibt an, ob die Datei sich im Ringspeicher befindet.
-	 * 		- Es handelt sich um einem Ringspeicher wenn der true ist ansonst false.
-	 ****************************************************************************************/
-	bool m_isRingBuffer	{false};
-
 };
 
 
-#endif /* GPFCOMMON_INFRASTRUCTURE_MEMORY_FILEOBJECT_H_ */
+#endif /*  */
