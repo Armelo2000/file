@@ -6,12 +6,11 @@
  */
 
 
-//#include "GPFCommon/Infrastructure/Memory/FileObject.h"
+
 #include <iostream>
 #include <fstream>
 #include <cstdint>
 #include <filesystem>
-//#include <GPFCommon/Infrastructure/Memory/MemoryNode.h>
 #include "FileObject/FileObject.h"
 
 namespace fs = std::filesystem;
@@ -42,104 +41,19 @@ void FileObject::init(){
 								"txt",
 								1 /* 1KB */,
 								4);
-	if(m_file != nullptr)
-	m_file->m_log = "Das ist nur ein Test\n";
+
 }
 
 void FileObject::updateFileObject(){
 	if(m_circular_buffer != nullptr){
-
-		if(this->m_curFileSize >= this->m_maxFileSize){
-			m_circular_buffer->updateWritePosition();
-			this->m_curFileSize = 0;
-			if(this->m_curFileIndex == MAX_INDEX){
-				this->m_curFileIndex = 1;
-			}else{
-				this->m_curFileIndex++;
-			}
+		m_circular_buffer->updateWritePosition();
+		m_curFileIndex++;
+		m_curFileSize = 0;
+		if(m_curFileIndex == 0){
+			m_curFileIndex = 1;
 		}
 	}
 }
-
-/**************************************************************************************
- * Diese Methode schreibt im Datei
- * @param: file, das ist das Objekt mit der Datei wo es geschrieben werden soll.
- *************************************************************************************/
-void FileObject::save(FileObject* file){
-
-	if(file != nullptr){
-		auto p = "C:\\Users\\tsa\\Downloads\\" + file->m_folder;
-		auto f = p + "\\" + file->m_fileName + "_" + to_string(file->m_index) + file->m_extension;
-		const fs::path dir{p};
-		ofstream oFile;
-		if(fs::exists(dir)){				// TODO FileSystem : replace the function exists (check if a Path exist) With HAL function
-			const fs::path dirFile{f};
-			if(fs::exists(dirFile)){		// TODO FileSystem : replace the function exists (check if the file exist) with HAL function
-				//Check the size;
-				auto fileSizeBefore = fs::file_size(f);
-				if(fs::file_size(f) < file->m_maxFileSize){	// TODO FileSystem : replace the function file_size (get the file size) with HAL function
-					oFile.open(f, ios::app);	// TODO FileSystem : replace the function open (open file and append) with HAL function
-					// write to file
-					oFile << file->m_log;		// TODO FileSystem : replace the write function (write to file) with HAL function
-					auto fileSizeAfter = fs::file_size(f);
-					auto fileSizeMore = fileSizeBefore - fileSizeAfter;
-
-					oFile.close();				// TODO FileSystem : replace the function close (close the file) with HAL function
-				}else{
-					//size is exceeded
-					if(file->m_isRingBuffer){
-						if(file->m_index < file->m_numberOfFile){
-							file->m_index++;
-							f = p + "\\" + file->m_fileName + "_" + to_string(file->m_index) + file->m_extension;
-							oFile.open(f);		// TODO FileSystem : replace the function open (open: create new file if not exist) with HAL function
-							// write to file
-							oFile << file->m_log;	// TODO FileSystem : replace the write function (write to file) with HAL function
-
-							oFile.close();			// TODO FileSystem : replace the function close (close the file) with HAL function
-
-						}else{
-							//override or delete the last created file
-							uint32_t lastIndex = file->m_index - file->m_numberOfFile + 1;
-							file->m_index++;
-							f = p + "\\" + file->m_fileName + "_" + to_string(lastIndex) + file->m_extension;
-							fs::remove(f);  // TODO FileSystem : replace the function remove (delete the file) with HAL function
-							f = p + "\\" + file->m_fileName + "_" + to_string(file->m_index) + file->m_extension;
-							oFile.open(f);		// TODO FileSystem : replace the function open (open: create new file if not exist) with HAL function
-							// write to file
-							oFile << file->m_log;	// TODO FileSystem : replace the write function (write to file) with HAL function
-
-							oFile.close();			// TODO FileSystem : replace the function close (close the file) with HAL function
-
-						}
-					}
-				}
-			}else{
-				//file do not exist
-				//create and write to it
-				oFile.open(f);			// TODO FileSystem : replace the function open (open: create new file if not exist) with HAL function
-				// write to file
-				oFile << file->m_log;	// TODO FileSystem : replace the write function (write to file) with HAL function
-
-				oFile.close();		// TODO FileSystem : replace the function close (close the file) with HAL function
-			}
-
-
-
-		}else{
-			fs::create_directories(dir);
-
-			oFile.open(f);			// TODO FileSystem : replace the function open (open: create new file if not exist) with HAL function
-			// write to file
-			oFile << file->m_log;	// TODO FileSystem : replace the write function (write to file) with HAL function
-
-			oFile.close();			// TODO FileSystem : replace the function close (close the file) with HAL function
-		}
-
-
-	}
-
-}
-
 
 /*******************************************************************************************
  * Diese Routine liefert zurück, der Ordnername wo die Dateien gespeichert werden sollen.
@@ -152,7 +66,15 @@ string FileObject::getFolderName(){
  * Diese Routine liefert der Dateiname zurück.
  *******************************************************************************************/
 string FileObject::getFileName(){
-	return this->m_fileName;
+	if(m_circular_buffer != nullptr){
+		if(m_curFileIndex == 0){
+			return m_fileName + "_1." + m_extension;
+		}else{
+			return m_fileName + "_" + to_string(m_curFileIndex) + "." + m_extension;
+		}
+	}else{
+		return this->m_fileName + "." + m_extension;
+	}
 }
 
 /*******************************************************************************************
@@ -190,6 +112,8 @@ int FileObject::getNewFileId(){
 	fs::directory_iterator fileList = fs::directory_iterator(p);
 	int fileIndex = 0;
 	int prevFileIndex = 0;
+	int higherIndex = 0;
+	bool firstLoop = true;
 
 	for(const auto& file: fileList){
 		//Pfad der gefundene Datei ermitteln
@@ -207,15 +131,30 @@ int FileObject::getNewFileId(){
 				fileIndex = stoi(fileIndexStr);
 				int diff = fileIndex - prevFileIndex;
 
-				if(diff > 1){
-					return prevFileIndex;
+				if(firstLoop){
+					higherIndex = fileIndex;
+					firstLoop = false;
+				}
+				if(prevFileIndex == 0){
+					continue;
 				}
 
+				if(diff < -1){
+					return prevFileIndex;
+				}else if(diff > 1){
+					return fileIndex;
+				}
+				higherIndex = fileIndex > higherIndex?fileIndex:higherIndex;
+/*
+				if(count == m_circular_buffer->getMaxCount()){
+					return fileIndex;
+				}
+*/
 			}
 		}
 	}
 
-	return fileIndex;
+	return higherIndex;
 
 }
 
@@ -232,6 +171,8 @@ int FileObject::getOldFileId(){
 	fs::directory_iterator fileList = fs::directory_iterator(p);
 	int fileIndex = 0;
 	int prevFileIndex = 0;
+	int lowerIndex = 0;
+	bool firstLoop = true;
 
 	for(const auto& file: fileList){
 		//Pfad der gefundene Datei ermitteln
@@ -249,23 +190,46 @@ int FileObject::getOldFileId(){
 				fileIndex = stoi(fileIndexStr);
 				int diff = fileIndex - prevFileIndex;
 
-				if(diff > 1){
-					return fileIndex;
+				if(firstLoop){
+					lowerIndex = fileIndex;
+					firstLoop = false;
+				}
+				if(prevFileIndex == 0){
+					continue;
 				}
 
+				if(diff < -1){
+					return fileIndex;
+				}else if(diff > 1){
+					return prevFileIndex;
+				}
+				lowerIndex = fileIndex < lowerIndex?fileIndex:lowerIndex;
 			}
 		}
 	}
 
-	return fileIndex;
+	return lowerIndex;
+}
+
+/***************************************************************
+ * Diese routine erzeugt eine neue Ordner
+ **************************************************************/
+void FileObject:: createFolder(){
+
 }
 
 /***************************************************************
  * Diese routine erzeugt eine neue Datei
  **************************************************************/
 void FileObject::createFile(){
-	string filepath = ROOT_DIR + m_folder + "\\" +
+	string filepath = "";
+	if(m_circular_buffer != nullptr){
+		filepath= ROOT_DIR + m_folder + "\\" +
 			m_fileName + "_" + to_string(m_curFileIndex) + "." + m_extension;
+	}else{
+		filepath= ROOT_DIR + m_folder + "\\" +
+			m_fileName + "." + m_extension;
+	}
 	//funktion von MemoryManager um Datei zu erstellen aufrufen.
 }
 
@@ -281,7 +245,10 @@ void FileObject::deleteFile(string filepath){
  **************************************************************/
 bool FileObject::isFileExist(string filepath){
 
-
+	fs::path file{filepath};
+	if(fs::exists(file)){
+		return true;
+	}
 	return false;
 }
 
@@ -291,43 +258,125 @@ bool FileObject::isFileExist(string filepath){
  **************************************************************/
 bool FileObject::isFolderExist(string folderpath){
 
+	fs::path folder{folderpath};
+	if(fs::exists(folder)){
+		return true;
+	}
 	return false;
 }
 
 /***********************************************************
- * Diese Routine schreibt in Datei
+ * Diese Routine schreibt string in Datei
+ ***********************************************************/
+void FileObject::write(string text){
+	uint8_t* data = (uint8_t*)(text.c_str());
+	uint32_t length = text.length();
+
+	this->write(data, length);
+}
+
+/***********************************************************
+ * Diese Routine schreibt byte in Datei
  ***********************************************************/
 void FileObject::write(uint8_t* data, uint32_t length){
 	string path = ROOT_DIR + m_folder;
 	string filepath = "";
+	static bool firstWrite = true;
 
+	//prüfen ob der Ordner schon existiert
 	if(!isFolderExist(path)){
 		//falls der Ordner noch nicht existiert dann neue erstellen
-	}
-	if((m_circular_buffer != nullptr) && (m_curFileIndex == 0)) {
-		m_curFileIndex = 1;
-	}
-
-	if(m_circular_buffer != nullptr){
-		filepath = path + "\\" + m_fileName + "_" +
-					to_string(m_curFileIndex) + "." + m_extension;
+		fs::create_directories(path);
 	}else{
-		filepath = path + "\\" + m_fileName + "." + m_extension;
-	}
 
+		if(firstWrite){
+			m_curFileIndex = getNewFileId();
+			if(m_curFileIndex > 0){
+				string file = path + "\\" + m_fileName + "_" +
+							to_string(m_curFileIndex) + "." + m_extension;
 
-	//prüfen ob filepath schon existiert
-	if(isFileExist(filepath)){
-		//wenn ja in datei weiter schreiben(Ring) oder überschreiben und der aktuelle datei größe absichern
-		if(m_circular_buffer != nullptr){
-			//append
-		}else{
-			//überschreiben
+				m_curFileSize = fs::file_size(file);
+				//Liste alle Dateien im Ordner holen TODO
+				fs::directory_iterator fileList = fs::directory_iterator(path);
+				uint32_t count = 0;
+
+				if(m_circular_buffer != nullptr){
+					for(const auto& file: fileList){
+						count++;
+						m_circular_buffer->updateWritePosition();
+						(void)file;
+					}
+				}
+			}
+			firstWrite = false;
 		}
 	}
-	//wenn nein, prüfen ob es ein ringspeicher ist
-	// - Ring => es soll geprüft werden ob der ring voll ist
-	//    + Ring voll - alte datei löschen neu erstellen und schreiben
-	//    + Ring nicht voll - keine datei löschen sondern aktuelle weiter schreiben
+
+
+
+	//prüfen ob es sich um einen Ringspeicher handeln
+	if(m_circular_buffer != nullptr){
+
+		//Dateien werden in Ring gespeichert
+		if(m_curFileIndex == 0){
+			m_curFileIndex++;
+		}
+		filepath = path + "\\" + m_fileName + "_" +
+							to_string(m_curFileIndex) + "." + m_extension;
+
+		ofstream oFile;
+
+		if((m_curFileSize + length) > m_maxFileSize){
+
+			updateFileObject();
+
+			filepath = path + "\\" + m_fileName + "_" +
+								to_string(m_curFileIndex) + "." + m_extension;
+
+			if(m_circular_buffer->getCircularBufferState()){
+				//Der ring ist voll. Älteste Eintrag löschen.
+				int id = this->getOldFileId();
+
+				if(id > 0){
+					string rf = path + "\\" + m_fileName + "_" +
+								to_string(id) + "." + m_extension;
+
+					fs::remove(rf);
+				}
+			}
+		}
+
+		if(!isFileExist(filepath)){
+			//fs::create_directories(filepath);
+			//ein neue Datei wir erstellt falls es noch nicht gibt
+			oFile.open(filepath);
+			oFile.write((char*)data, length);
+			oFile.close();
+
+		}else{
+
+			oFile.open(filepath, ios::app);
+			oFile.write((char*)data, length);
+			oFile.close();
+		}
+
+		m_curFileSize = fs::file_size(filepath);
+
+	}else{
+		//nur eine Datei wird gespeichert. Kein Ringspeicher
+		filepath = path + "\\" + m_fileName + "." + m_extension;
+
+		//datei erzeugen falls es noch nicht existiert
+		if(!isFileExist(filepath)){
+			fs::create_directories(filepath);
+		}
+
+		//Es wird in der Datei geschrieben
+		ofstream oFile;
+		oFile.open(filepath);
+		oFile.write((char*)data, length);
+		oFile.close();
+
+	}
 
 }
